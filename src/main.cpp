@@ -1,5 +1,9 @@
 #include <Arduino.h>
 #include <Logger.h>
+#include <WiFi.h>
+#include <ArduinoOTA.h>
+#include <Adafruit_NeoPixel.h>
+
 #include "config.h"
 #include "BatteryMonitor.h"
 #include "Buzzer.h"
@@ -9,6 +13,7 @@
 #include "BleServer.h"
 #include "CanBus.h"
 #include "AppConfiguration.h"
+
 
 long mainLoop = 0;
 long loopTime = 0;
@@ -25,7 +30,7 @@ VescData vescData;
 
 HardwareSerial vesc(2);
 
-ILedController *ledController;
+//ILedController *ledController;
 
 #if defined(CANBUS_ENABLED)
  CanBus * canbus = new CanBus(&vescData);
@@ -33,6 +38,9 @@ ILedController *ledController;
  BatteryMonitor *batMonitor = new BatteryMonitor(&vescData);
 
 BleServer *bleServer = new BleServer();
+
+int port = 65102;  // standard vesc port
+WiFiServer WifiServer(port);
 
 // Declare the local logger function before it is called.
 void localLogger(Logger::Level level, const char* module, const char* message);
@@ -75,11 +83,13 @@ void setup() {
      return;
   }
 
+  /*
   ledController = LedControllerFactory::getInstance()->createLedController(&vescData);
 
   pinMode(PIN_FORWARD, INPUT);
   pinMode(PIN_BACKWARD, INPUT);
   pinMode(PIN_BRAKE, INPUT);
+  */
 
   vesc.begin(VESC_BAUD_RATE, SERIAL_8N1, VESC_RX_PIN, VESC_TX_PIN, false);
   delay(50);
@@ -96,17 +106,42 @@ void setup() {
 #else
   bleServer->init(&vesc);
 #endif
+
+  /*
   // initialize the LED (either COB or Neopixel)
   ledController->init();
 
   Buzzer::getInstance()->startSequence();
   ledController->startSequence();
+  */
 
   char buf[128];
   snprintf(buf, 128, " sw-version %d.%d.%d is happily running on hw-version %d.%d",
     SOFTWARE_VERSION_MAJOR, SOFTWARE_VERSION_MINOR, SOFTWARE_VERSION_PATCH,
     HARDWARE_VERSION_MAJOR, HARDWARE_VERSION_MINOR);
   Logger::notice("rESCue", buf);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin("xeniter", "dipolts_wifi");
+
+  ArduinoOTA.setHostname("rESCueST");
+  ArduinoOTA.begin();
+
+  WifiServer.begin();
+
+  uint num_pixels = 22;
+  Adafruit_NeoPixel front_leds(num_pixels, 4, NEO_GRB + NEO_KHZ800);
+  for (int i = 0; i < num_pixels; i++) {
+      front_leds.setPixelColor(i, Adafruit_NeoPixel::Color(200, 200, 200)); // RGB 
+  }
+  front_leds.show();
+
+  
+  Adafruit_NeoPixel back_leds(num_pixels, 2, NEO_GRB + NEO_KHZ800);
+  for (int i = 0; i < num_pixels; i++) {
+      back_leds.setPixelColor(i, Adafruit_NeoPixel::Color(200, 0, 0)); // RGB 
+  }
+  back_leds.show();
 }
 
 void loop() {
@@ -127,6 +162,36 @@ void loop() {
       AppConfiguration::getInstance()->config.saveConfig = false;
   }
 
+
+  ArduinoOTA.handle();
+
+  WiFiClient client = WifiServer.available();
+
+  if (client) {
+    if(client.connected())
+    {
+      //Serial.println("Client Connected");
+      Logger::error(LOG_TAG_BLESERVER, "Client Connected");
+    }
+
+    while(client.connected()){      
+      while(client.available()>0){
+        // read data from the connected client
+        vesc.write(client.read()); 
+      }
+      //Send Data to connected client
+      while(vesc.available()>0)
+      {
+        client.write(vesc.read());
+      }
+    }
+    client.stop();
+    //Serial.println("Client disconnected");    
+    Logger::error(LOG_TAG_BLESERVER, "Client disconnected");
+  }
+
+
+/*
 #ifdef CANBUS_ENABLED
   #ifdef FAKE_VESC_ENABLED
     fakeCanbusValues();
@@ -142,6 +207,7 @@ void loop() {
   new_brake    = digitalRead(PIN_BRAKE);
   idle         = new_forward == LOW && new_backward == LOW;
 #endif
+*/
 
 #ifdef CANBUS_ENABLED
  #ifndef FAKE_VESC_ENABLED
@@ -149,14 +215,14 @@ void loop() {
  #endif
 #endif
 
-  // is motor brake active?
-  if(new_brake == HIGH) {
-    // flash backlights
-    ledController->changePattern(Pattern::RESCUE_FLASH_LIGHT, new_forward == HIGH, false);
-  }
+  // // is motor brake active?
+  // if(new_brake == HIGH) {
+  // // flash backlights
+  //   ledController->changePattern(Pattern::RESCUE_FLASH_LIGHT, new_forward == HIGH, false);
+  // }
 
-  // call the led controller loop
-  ledController->loop(&new_forward, &new_backward, &idle);
+  // // call the led controller loop
+  // ledController->loop(&new_forward, &new_backward, &idle);
 
   // measure and check voltage
   batMonitor->checkValues();
