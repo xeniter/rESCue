@@ -69,6 +69,10 @@ void fakeCanbusValues() {
 }
 #endif
 
+uint num_pixels = 22;
+Adafruit_NeoPixel front_leds(num_pixels, 4, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel back_leds(num_pixels, 15, NEO_GRB + NEO_KHZ800);
+
 void setup() {
   Logger::setOutputFunction(localLogger);
 
@@ -129,19 +133,16 @@ void setup() {
 
   WifiServer.begin();
 
-  uint num_pixels = 22;
-  Adafruit_NeoPixel front_leds(num_pixels, 4, NEO_GRB + NEO_KHZ800);
   for (int i = 0; i < num_pixels; i++) {
-      front_leds.setPixelColor(i, Adafruit_NeoPixel::Color(200, 200, 200)); // RGB 
+      front_leds.setPixelColor(i, Adafruit_NeoPixel::Color(0, 200, 0)); // RGB 
   }
   front_leds.show();
-
   
-  Adafruit_NeoPixel back_leds(num_pixels, 2, NEO_GRB + NEO_KHZ800);
   for (int i = 0; i < num_pixels; i++) {
-      back_leds.setPixelColor(i, Adafruit_NeoPixel::Color(200, 0, 0)); // RGB 
+      back_leds.setPixelColor(i, Adafruit_NeoPixel::Color(0, 200, 0)); // RGB 
   }
   back_leds.show();
+
 }
 
 void loop() {
